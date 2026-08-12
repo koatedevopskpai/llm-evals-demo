@@ -31,10 +31,15 @@ jobs:
         run: python run_evals.py --mode mock --threshold 0.90
 
       - name: Eval gate (real - only when OPENAI_API_KEY secret present)
-        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        if: ${{ !cancelled() }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python run_evals.py --mode real --threshold 0.90
+        run: |
+          if [ -n "$OPENAI_API_KEY" ]; then
+            python run_evals.py --mode real --threshold 0.90
+          else
+            echo "OPENAI_API_KEY not set - skipping real eval gate"
+          fi
 
       - name: Unit tests
         run: pytest tests/ -q
