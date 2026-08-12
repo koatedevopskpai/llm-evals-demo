@@ -2,6 +2,7 @@ name: eval-gate
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   gate:
@@ -15,9 +16,9 @@ jobs:
         run: pip install -r requirements.txt
       - name: Golden set sanity
         run: python golden_set.py
-      - name: Eval gate (mock — free, no keys)
+      - name: Eval gate (mock - free, no keys)
         run: python run_evals.py --mode mock --threshold 0.90
-      - name: Eval gate (real — only when OPENAI_API_KEY secret present)
+      - name: Eval gate (real - only when OPENAI_API_KEY secret present)
         if: ${{ secrets.OPENAI_API_KEY != '' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
