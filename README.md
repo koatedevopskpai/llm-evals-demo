@@ -61,4 +61,4 @@ pytest tests/ -q      # mock-mode gate behaviour, no API needed
 - `evals/golden.json` is the human-curated ground truth — the thing that makes the bar honest.
 - Swap `OPENAI_BASE_URL` for any OpenAI-compatible provider (OpenRouter, vLLM, Ollama's OpenAI layer) — provider-agnostic by design.
 
-Built by George Kpai (github.com/koate-kpai) as part of an AI engineering portfolio. See the eval-platform design in `agentic-platform-aws`.
+Built by koate-kpai as part of an AI engineering portfolio. See the eval-platform design in `agentic-platform-aws`.
