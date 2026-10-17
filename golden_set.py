@@ -8,9 +8,21 @@ from dataclasses import dataclass
 
 @dataclass
 class GoldenCase:
+    """One evaluation case.
+
+    ``reference_answer`` is the human-authored ground truth. It is NOT the thing
+    that gets scored. ``generated_answer`` is what the application under test
+    actually produced, and that is what the scorer must see.
+
+    Keeping both as separate fields is the point of E01: the previous
+    implementation passed ``reference_answer`` to RAGAS as the answer, so a
+    perfect score was guaranteed regardless of what the application produced.
+    """
+
     question: str
     reference_answer: str
     retrieved_contexts: list[str]
+    generated_answer: str | None = None
 
 
 class GoldenSet:
@@ -27,6 +39,7 @@ class GoldenSet:
                 question=c["question"],
                 reference_answer=c["reference_answer"],
                 retrieved_contexts=c.get("retrieved_contexts", []),
+                generated_answer=c.get("generated_answer"),
             )
             for c in data.get("cases", [])
         ]
