@@ -1,0 +1,12 @@
+{
+  "policy_id": "pilot-structured-v1",
+  "scope": "Author-authored regression fixtures and small smoke checks; not a production-calibrated benchmark",
+  "mean_floors": {"faithfulness": 0.92, "answer_relevancy": 0.90},
+  "per_case_floors": {"faithfulness": 0.50, "answer_relevancy": 0.50},
+  "rationale": "Acceptable development fixture minima are 0.94 and 0.92. Mean floors leave 0.02 absolute tolerance below those minima. A score below 0.50 on any case is critical and cannot be diluted by a mean. These provisional values need held-out validation in deferred B01.",
+  "baseline_fixture_scores": [
+    {"faithfulness": 0.98, "answer_relevancy": 0.96},
+    {"faithfulness": 0.96, "answer_relevancy": 0.94},
+    {"faithfulness": 0.94, "answer_relevancy": 0.92}
+  ]
+}
