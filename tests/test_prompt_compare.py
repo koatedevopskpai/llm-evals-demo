@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from bounded_provider import BoundedProvider
-from prompt_compare import ROOT, compare, load_cases, reassess_saved
+from prompt_compare import ROOT, compare, load_cases, reassess_saved, newline_hashes
 
 
 def test_same_thirty_questions_actual_answers_and_failure_publication(tmp_path):
@@ -97,6 +97,9 @@ def test_positive_gate_and_unchanged_reassessment(tmp_path):
     frozen = path.read_bytes()
     assert frozen == json.dumps(original).encode()
     assert corrected['execution_mode'] == 'offline_reassessment_of_saved_live_outputs'
+    original['policy_sha256'] = next(iter(newline_hashes(ROOT/'evals/gate-policy.json')))
+    path.write_text(json.dumps(original))
+    assert reassess_saved(path,tmp_path/'line-endings.json')['paired_outcomes']['both_pass'] == 30
     # Changing prompts/cases/thresholds cannot masquerade as a metadata-only repair.
     original['case_sha256'] = 'changed'
     path.write_text(json.dumps(original))

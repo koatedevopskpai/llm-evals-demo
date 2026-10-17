@@ -177,6 +177,13 @@ def compare(provider, output, cases_path=ROOT/'evals/P01-cases.json'):
     return report
 
 
+def newline_hashes(path):
+    """Git LF/CRLF checkout differences do not change a prompt, policy or case."""
+    text = Path(path).read_text(encoding='utf-8')
+    return {hashlib.sha256(value.encode()).hexdigest() for value in
+            (text, text.replace('\n', '\r\n'))}
+
+
 def reassess_saved(original_path, output):
     """Re-evaluate frozen live outputs, without generating or judging again."""
     original_path, output = Path(original_path), Path(output)
@@ -186,9 +193,10 @@ def reassess_saved(original_path, output):
     cases_path = ROOT/'evals/P01-cases.json'
     cases = load_cases(cases_path)
     policy = load_policy()
-    if not report['run_complete'] or report['case_sha256'] != hashlib.sha256(cases_path.read_bytes()).hexdigest():
+    if not report['run_complete'] or report['case_sha256'] not in newline_hashes(cases_path):
         raise ValueError('Incomplete run or changed cases')
-    if report['policy_sha256'] != hashlib.sha256((ROOT/'evals/gate-policy.json').read_bytes()).hexdigest():
+    if (report['policy'] != policy or report['policy_sha256'] not in
+            newline_hashes(ROOT/'evals/gate-policy.json')):
         raise ValueError('Policy changed since live run')
     raw_fields = ['generated_answer', 'faithfulness', 'answer_relevancy',
                   'generation_seconds', 'judge_seconds', 'generation_estimated_usd',
