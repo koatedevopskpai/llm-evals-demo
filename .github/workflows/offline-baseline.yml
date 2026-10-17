@@ -1,0 +1,23 @@
+name: offline-baseline
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements-offline.lock
+      - run: python -m pytest -p offline_guard tests -q --junitxml=offline-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-results
+          path: offline-results.xml
