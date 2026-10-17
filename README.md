@@ -100,3 +100,14 @@ Authored by Koate Kpai: https://github.com/koatedevopskpai
 on the same three authored questions, with generation/judge usage, cost and
 latency recorded separately. Both passed this small run; the result is not a
 benchmark, significance claim or production-model recommendation.
+
+
+## P01 paired prompt comparison (17 October 2026)
+
+[Method and dated results](docs/P01.md), [every failed case](docs/P01-failures.md).
+Thirty authored cases per prompt: 27/30 baseline versus 29/30 constrained per-case
+checks. Candidate costs more and mean faithfulness is slightly lower. A shared
+scored failure exposes a judge/refusal disagreement. The adapter metadata defect
+was corrected by reassessing saved live outputs, without new calls or changed
+thresholds; original evidence retained. These are small development observations,
+not statistical superiority, a held-out benchmark or Claude Code performance.
