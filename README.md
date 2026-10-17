@@ -89,3 +89,10 @@ not done: this harness measures an application when pointed at one, and nothing
 in CI does that automatically.
 
 Authored by Koate Kpai: https://github.com/koatedevopskpai
+
+## Paired smoke comparison (E05)
+
+[Comparison method and limitations](docs/E05.md) describes two configurations
+on the same three authored questions, with generation/judge usage, cost and
+latency recorded separately. Both passed this small run; the result is not a
+benchmark, significance claim or production-model recommendation.
