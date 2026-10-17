@@ -20,9 +20,9 @@ Two modes, deliberately distinct:
   from the retrieved contexts and produces the generated answer.
 - `evaluator.py` refuses to score when a case has no generated answer, rather
   than substituting anything. Mock mode returns deterministic placeholders.
-- `run_evals.py` checks mean faithfulness >= 0.90 and answer relevancy >= 0.85
-  by default. These are configured demonstration thresholds, not validated
-  acceptance criteria for a particular application.
+- `run_evals.py` uses the versioned E04 policy for real mode: provisional
+  mean floors 0.92/0.90 plus hard per-case/structure checks. Mock mode retains
+  0.90/0.85 as wiring thresholds. Neither is a production-calibrated guarantee.
 - Tests cover the substitution bug directly: a wrong generated answer fails the
   gate while a correct reference answer is present.
 
@@ -75,15 +75,16 @@ python run_evals.py --mode real --max-cases 3 \
     --model gpt-5-nano --report artifacts/live-report.md
 ```
 
-Exit codes: `0` bar met, `1` bar missed or a case produced no answer, `2` refused
-before making any provider call (no credential, mock asked to satisfy a
-live-quality requirement, no cases).
+Exit codes: `0` policy met, `1` policy failed (including empty/malformed results),
+`2` refused before a provider call, such as a missing credential or a mock run
+asked to satisfy live quality.
 
 ## Planned improvements
 
-Calibrate thresholds against known-bad cases (E04), add a quality/latency/cost
-comparison across configurations (E05), and version the benchmark and provenance
-more thoroughly (E03). Wiring a live gate into the deployment path (R01/O02) is
+[E04](docs/E04.md) adds fail-closed checks and a provisional development policy,
+with three correct and three wrong authored outputs checked by a live custom
+judge. This is not the deferred B01 benchmark. A quality/latency/cost comparison
+(E05) and fuller held-out provenance (E03/B01) remain separate work. Wiring a live gate into the deployment path (R01/O02) is
 not done: this harness measures an application when pointed at one, and nothing
 in CI does that automatically.
 
