@@ -1,5 +1,9 @@
 # llm-evals-demo — evaluation harness for generated answers
 
+> **Reviewing this?** Start at [EVIDENCE.md](EVIDENCE.md) — what the harness
+> measures, the strongest result with its provenance, how to reproduce it, and what
+> it does not establish.
+
 A small reference harness for loading golden cases, generating an answer per
 case through an application adapter, and scoring **the generated answer** against
 faithfulness and answer-relevancy thresholds.
