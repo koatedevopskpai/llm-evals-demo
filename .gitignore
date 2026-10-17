@@ -7,4 +7,23 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-EVAL_REPORT.md
+
+# ── Generated evidence — deliberately NOT tracked ────────────────────────────
+# CI writes these at run time and uploads them as workflow artifacts; they are
+# reproduced by the documented commands, not reviewed as source.
+#
+# Why they are ignored: committing per-run output meant every pair of branches
+# from the same base conflicted. On 17 Oct 2026 PRs #1/#2 collided on
+# artifacts/pytest.xml and artifacts/test-output.txt (add/add) and the merge had
+# to be resolved by hand. Regenerate instead of committing:
+#   python -m pytest -p offline_guard tests -q --junitxml=artifacts/pytest.xml
+#   python run_evals.py --mode mock --report artifacts/mock-report.md
+artifacts/*
+!artifacts/README.md
+
+# Written to the repository root by .github/workflows/offline-baseline.yml
+offline-results.xml
+
+# Default output paths of run_evals.py (report + matching JSON payload)
+EVAL_REPORT*.md
+EVAL_REPORT*.json
