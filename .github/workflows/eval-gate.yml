@@ -1,45 +1,48 @@
 name: eval-gate
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
-
+    inputs:
+      require_live_quality:
+        description: "Require live release quality (blocked until E01)"
+        type: boolean
+        default: false
+permissions:
+  contents: read
 jobs:
-  gate:
+  offline-scaffold:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Golden set sanity
-        run: python golden_set.py
-
-      - name: Eval gate (mock - free, no keys)
-        run: python run_evals.py --mode mock --threshold 0.90
-
-      - name: Eval gate (real - only when OPENAI_API_KEY secret present)
-        if: ${{ !cancelled() }}
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ -n "$OPENAI_API_KEY" ]; then
-            python run_evals.py --mode real --threshold 0.90
-          else
-            echo "OPENAI_API_KEY not set - skipping real eval gate"
-          fi
-
-      - name: Unit tests
-        run: pytest tests/ -q
+          python-version: "3.12"
+      - run: python -m pip install pytest==8.4.2
+      - run: python golden_set.py
+      - run: python -m pytest tests -q
+      - name: Placeholder contract check, not live quality
+        run: python run_evals.py --mode mock --report artifacts/mock-report.md
+      - name: Explain evidence boundary
+        run: echo "Offline scaffold only; no live evaluation ran; no quality release is authorised." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-scaffold-${{ github.sha }}
+          path: artifacts/mock-report.*
+  live-quality-required:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.require_live_quality }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Block unsupported live release evaluation without provider calls
+        run: python run_evals.py --mode real --require-live-quality --report artifacts/live-report.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blocked-live-quality-${{ github.sha }}
+          path: artifacts/live-report.*

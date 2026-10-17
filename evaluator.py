@@ -1,4 +1,4 @@
-"""evaluator.py — RAGAS metrics with a mock fallback so CI runs free and offline."""
+"""Offline placeholder evaluator; live scoring is disabled pending E01."""
 
 from __future__ import annotations
 
@@ -11,16 +11,22 @@ from golden_set import GoldenCase
 class Evaluator:
     """Scores faithfulness + answer relevancy per golden case.
 
-    Real mode uses RAGAS against any OpenAI-compatible endpoint (OpenRouter,
-    vLLM, Ollama). Mock mode returns deterministic placeholder scores so the
-    pipeline and gate can be exercised in CI with zero cost / no keys.
+    Mock mode returns deterministic placeholders for wiring checks. The legacy
+    RAGAS code below substitutes the reference answer and is deliberately
+    inaccessible through supported construction until E01 repairs measurement.
     """
 
     def __init__(self, mode: str = "mock") -> None:
+        if mode not in {"mock", "real"}:
+            raise ValueError(f"Unsupported evaluation mode: {mode}")
+        if mode == "real":
+            # E01 is not implemented: current scoring substitutes the reference.
+            # Fail before loading SDKs or issuing a provider request.
+            raise RuntimeError(
+                "Live quality evaluation unavailable until E01 evaluates generated answers."
+            )
         self.mode = mode
         self._ragas = None
-        if mode == "real":
-            self._ragas = self._load_ragas()
 
     @staticmethod
     def _load_ragas() -> Any:
