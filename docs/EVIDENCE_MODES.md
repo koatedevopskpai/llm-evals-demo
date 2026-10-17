@@ -1,5 +1,9 @@
 # Evaluation evidence modes (E02)
 
+> Historical E02 notes below describe the initial safeguard. E01 is now merged
+> and supports real generated-answer scoring. For current behaviour see the
+> README, docs/E01.md and docs/E04.md; the earlier budget-block wording is stale.
+
 `python run_evals.py --mode mock --report artifacts/mock.md` exercises placeholder
 scores and thresholds. Exit 0 means an offline contract passed, not that an
 application answer is faithful. JSON and Markdown identify mode, evaluator and
