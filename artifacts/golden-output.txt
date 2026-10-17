@@ -1,0 +1,1 @@
+golden set OK: 30 cases; bar={'faithfulness': 0.9, 'answer_relevancy': 0.85}
