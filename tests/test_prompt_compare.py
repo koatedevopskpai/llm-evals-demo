@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from bounded_provider import BoundedProvider
-from prompt_compare import ROOT, compare, load_cases
+from prompt_compare import ROOT, compare, load_cases, reassess_saved
 
 
 def test_same_thirty_questions_actual_answers_and_failure_publication(tmp_path):
@@ -67,3 +67,38 @@ def test_cases_cannot_silently_shrink_or_duplicate(tmp_path):
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match='30-50'):
         load_cases(path)
+
+
+def test_positive_gate_and_unchanged_reassessment(tmp_path):
+    def respond(request, **kwargs):
+        body = json.loads(request.data)
+        judge = 'response_format' in body
+        content = ('{"faithfulness":1.0,"answer_relevancy":1.0}' if judge
+                   else 'The context does not state the requested information. [1]')
+        return io.BytesIO(json.dumps({
+            'model':'fixture', 'usage':{'prompt_tokens':10,'completion_tokens':5},
+            'choices':[{'finish_reason':'stop','message':{'content':content}}],
+        }).encode())
+    provider = BoundedProvider('fixture',tmp_path/'usage.json',120,1.0,opener=respond)
+    path = tmp_path/'raw.json'
+    original = compare(provider,path)
+    assert original['paired_outcomes']['both_pass'] == 30
+    assert original['results']['baseline-v1']['aggregate_quality_gate']['passed']
+    original_bytes = path.read_bytes()
+    # Reproduce the adapter defect on frozen outputs; semantic evidence is untouched.
+    for value in original['results'].values():
+        for row in value['rows']:
+            del row['question'], row['retrieved_contexts']
+    path.write_text(json.dumps(original))
+    corrected = reassess_saved(path,tmp_path/'corrected.json')
+    assert corrected['paired_outcomes']['both_pass'] == 30
+    assert corrected['reassessment_provider_calls'] == 0 and len(provider.records) == 120
+    assert path.read_bytes() != original_bytes
+    frozen = path.read_bytes()
+    assert frozen == json.dumps(original).encode()
+    assert corrected['execution_mode'] == 'offline_reassessment_of_saved_live_outputs'
+    # Changing prompts/cases/thresholds cannot masquerade as a metadata-only repair.
+    original['case_sha256'] = 'changed'
+    path.write_text(json.dumps(original))
+    with pytest.raises(ValueError,match='changed cases'):
+        reassess_saved(path,tmp_path/'invalid.json')

@@ -49,6 +49,7 @@ def load_cases(path):
 
 def classify(case, row, policy):
     categories = []
+    categories.extend('quality_gate:' + fail['reason'] for fail in row['outcome']['hard_failures'])
     if row.get('provider_error'):
         categories.append(row['provider_error_stage'] + '_provider_or_parse_failure')
     if row['faithfulness'] < policy['mean_floors']['faithfulness']:
@@ -121,6 +122,7 @@ def compare(provider, output, cases_path=ROOT/'evals/P01-cases.json'):
         order = VARIANTS if index % 2 == 0 else list(reversed(VARIANTS))
         for name in order:
             row = {'case_id': case['id'], 'category': case['category'],
+                   'question': case['question'], 'retrieved_contexts': case['retrieved_contexts'],
                    'generated_answer': '', 'faithfulness': 0.0, 'answer_relevancy': 0.0}
             start = len(provider.records)
             stage = 'generation'
@@ -175,12 +177,80 @@ def compare(provider, output, cases_path=ROOT/'evals/P01-cases.json'):
     return report
 
 
+def reassess_saved(original_path, output):
+    """Re-evaluate frozen live outputs, without generating or judging again."""
+    original_path, output = Path(original_path), Path(output)
+    if output.exists():
+        raise ValueError('Reassessment output exists; never overwrite original evidence')
+    report = json.loads(original_path.read_text(encoding='utf-8'))
+    cases_path = ROOT/'evals/P01-cases.json'
+    cases = load_cases(cases_path)
+    policy = load_policy()
+    if not report['run_complete'] or report['case_sha256'] != hashlib.sha256(cases_path.read_bytes()).hexdigest():
+        raise ValueError('Incomplete run or changed cases')
+    if report['policy_sha256'] != hashlib.sha256((ROOT/'evals/gate-policy.json').read_bytes()).hexdigest():
+        raise ValueError('Policy changed since live run')
+    raw_fields = ['generated_answer', 'faithfulness', 'answer_relevancy',
+                  'generation_seconds', 'judge_seconds', 'generation_estimated_usd',
+                  'judge_estimated_usd', 'input_tokens', 'output_tokens', 'attempt_indexes']
+    raw_before = []
+    raw_after = []
+    grouped = {}
+    for name in VARIANTS:
+        prompt = (ROOT/f'prompts/P01-{name}.txt').read_text(encoding='utf-8')
+        if report['prompt_sha256'][name] != hashlib.sha256(prompt.encode()).hexdigest():
+            raise ValueError('Prompt changed since live run')
+        rows = report['results'][name]['rows']
+        if [row['case_id'] for row in rows] != [case['id'] for case in cases]:
+            raise ValueError('Saved cases changed or incomplete')
+        for case, row in zip(cases, rows, strict=True):
+            raw_before.append({key: row[key] for key in raw_fields})
+            row.update(question=case['question'], retrieved_contexts=case['retrieved_contexts'])
+            row['outcome'] = assess_rows([row], policy, 1)
+            row['failure_categories'] = classify(case, row, policy)
+            row['passed'] = row['outcome']['passed'] and not row['failure_categories']
+            raw_after.append({key: row[key] for key in raw_fields})
+        grouped[name] = rows
+        report['results'][name] = {
+            'rows': rows, 'summary': summarise(rows),
+            'aggregate_quality_gate': assess_rows(rows, policy, len(cases)),
+            'all_contracts_passed': all(row['passed'] for row in rows),
+        }
+    assert raw_before == raw_after
+    pairs = list(zip(*(grouped[name] for name in VARIANTS), strict=True))
+    report['paired_outcomes'] = {
+        'v2_pass_v1_fail': sum(b['passed'] and not a['passed'] for a,b in pairs),
+        'v1_pass_v2_fail': sum(a['passed'] and not b['passed'] for a,b in pairs),
+        'both_pass': sum(a['passed'] and b['passed'] for a,b in pairs),
+        'both_fail': sum(not a['passed'] and not b['passed'] for a,b in pairs),
+    }
+    first, second = [report['results'][name]['summary'] for name in VARIANTS]
+    report['v2_minus_v1'] = {key: second[key]-first[key] for key in report['v2_minus_v1']}
+    report.update(
+        original_execution_mode=report['execution_mode'],
+        execution_mode='offline_reassessment_of_saved_live_outputs',
+        reassessed_at_utc=datetime.now(timezone.utc).isoformat(),
+        reassessment_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+        original_report_sha256=hashlib.sha256(original_path.read_bytes()).hexdigest(),
+        unchanged_live_fields_sha256=hashlib.sha256(json.dumps(raw_after,sort_keys=True).encode()).hexdigest(),
+        reassessment_provider_calls=0,
+        reassessment_reason='Restore omitted question/context metadata before unchanged E04 gate; no prompt, case, threshold, answer or judge-score changes.',
+    )
+    output.parent.mkdir(parents=True,exist_ok=True)
+    output.write_text(json.dumps(report,indent=2,allow_nan=False)+'\n',encoding='utf-8')
+    return report
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--output', default='artifacts/P01/report.json')
+    ap.add_argument('--reassess', help='Reassess a saved live report offline, without a provider key')
     args = ap.parse_args()
-    provider = BoundedProvider(os.getenv('OPENAI_API_KEY'), Path(args.output).with_name('usage.json'),
-                               max_calls=120, spend_limit_usd=1.0)
-    result = compare(provider, args.output)
+    if args.reassess:
+        result = reassess_saved(args.reassess, args.output)
+    else:
+        provider = BoundedProvider(os.getenv('OPENAI_API_KEY'), Path(args.output).with_name('usage.json'),
+                                   max_calls=120, spend_limit_usd=1.0)
+        result = compare(provider, args.output)
     print('Paired comparison complete:', result['paired_outcomes'])
     raise SystemExit(1 if result['provider_failure_count'] else 0)
