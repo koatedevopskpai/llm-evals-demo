@@ -1,0 +1,9 @@
+# CPython 3.12 offline test environment, resolved 2026-10-17.
+# Package installation requires a package source; test execution is offline.
+colorama==0.4.6; sys_platform == "win32"
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.7.0
+Pygments==2.21.0
+pytest==8.4.2
+PyYAML==6.0.3
