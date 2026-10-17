@@ -23,6 +23,7 @@ import statistics
 
 from answer_generator import DEFAULT_MODEL, generate_answers
 from evaluator import Evaluator, MissingGeneratedAnswer
+from gate_policy import assess_rows, json_safe, load_policy, DEFAULT_POLICY
 from golden_set import GoldenSet, GoldenCase
 
 
@@ -56,6 +57,7 @@ def _render(payload: dict) -> str:
 
 
 def write_report(path: Path, payload: dict) -> None:
+    payload = json_safe(payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_render(payload), encoding="utf-8")
     path.with_suffix(".json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -90,14 +92,21 @@ def main(
     """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mode", choices=["mock", "real"], default="mock")
-    ap.add_argument("--threshold", type=_bar, default=0.90)
-    ap.add_argument("--relevancy-bar", type=_bar, default=0.85)
+    ap.add_argument("--threshold", type=_bar, default=None)
+    ap.add_argument("--relevancy-bar", type=_bar, default=None)
     ap.add_argument("--report", default="EVAL_REPORT.mock.md")
     ap.add_argument("--require-live-quality", action="store_true",
                     help="Block unless genuine application-quality evidence is available")
     ap.add_argument("--max-cases", type=int, default=0, help="Limit cases (0 = all)")
     ap.add_argument("--model", default=DEFAULT_MODEL, help="Generation model for real mode")
+    ap.add_argument("--policy", default=str(DEFAULT_POLICY), help="Versioned real-mode gate policy")
     args = ap.parse_args(argv)
+    if args.max_cases < 0:
+        ap.error("--max-cases cannot be negative")
+    policy = load_policy(args.policy)
+    args.threshold = args.threshold if args.threshold is not None else (0.90 if args.mode == "mock" else policy["mean_floors"]["faithfulness"])
+    args.relevancy_bar = args.relevancy_bar if args.relevancy_bar is not None else (0.85 if args.mode == "mock" else policy["mean_floors"]["answer_relevancy"])
+    policy["mean_floors"] = {"faithfulness": args.threshold, "answer_relevancy": args.relevancy_bar}
 
     path = Path(args.report)
     if path.suffix.lower() != ".md":
@@ -147,30 +156,42 @@ def main(
     print(f"generating answers for {len(cases)} case(s) with {args.model} ...")
     cases = generate_answers(cases, complete_fn=complete_fn, model=args.model)
 
+    expected_count = len(cases)
     rows: list[dict] = []
     unanswerable = 0
     for i, case in enumerate(cases, start=1):
+        judge_error = None
         try:
             scores = evaluator.score(case)
+            if not isinstance(scores, dict):
+                raise ValueError("judge did not return a metric mapping")
         except MissingGeneratedAnswer as exc:
             # A case with no generated answer is a failure, not a skip.
             unanswerable += 1
             scores = {"faithfulness": 0.0, "answer_relevancy": 0.0, "note": str(exc)}
+        except (Exception, SystemExit) as exc:
+            judge_error = type(exc).__name__
+            scores = {"faithfulness": 0.0, "answer_relevancy": 0.0}
         rows.append({
             "case": i,
             "question": case.question,
             **scores,
             "generated_answer": case.generated_answer,
+            "retrieved_contexts": case.retrieved_contexts,
+            "judge_error": judge_error,
         })
 
-    mean_f = statistics.fmean(r["faithfulness"] for r in rows)
-    mean_r = statistics.fmean(r["answer_relevancy"] for r in rows)
-    ok = mean_f >= args.threshold and mean_r >= args.relevancy_bar
+    outcome = assess_rows(rows, policy, expected_count)
+    mean_f = outcome["means"]["faithfulness"]
+    mean_r = outcome["means"]["answer_relevancy"]
+    ok = outcome["passed"]
     payload.update(
         status="live_pass" if ok else "live_fail",
         case_count=len(rows),
         unanswerable_cases=unanswerable,
         generation_model=args.model,
+        policy=policy,
+        hard_failures=outcome["hard_failures"],
         means={"faithfulness": mean_f, "answer_relevancy": mean_r},
         rows=rows,
         # True means: answers were produced by a provider and scored on the
